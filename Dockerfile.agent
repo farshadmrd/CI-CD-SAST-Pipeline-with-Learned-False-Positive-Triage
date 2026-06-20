@@ -1,0 +1,20 @@
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# C/C++ build toolchain + Infer runtime libs + download utilities.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential autoconf automake libtool pkg-config \
+      git curl xz-utils ca-certificates \
+      zlib1g-dev libsqlite3-0 libgmp10 libtinfo6 \
+    && rm -rf /var/lib/apt/lists/*
+
+ARG INFER_VERSION=1.2.0
+RUN curl -fSL "https://github.com/facebook/infer/releases/download/v${INFER_VERSION}/infer-linux-x86_64-v${INFER_VERSION}.tar.xz" \
+      | tar -C /opt -xJ \
+    && ln -s "/opt/infer-linux-x86_64-v${INFER_VERSION}/bin/infer" /usr/local/bin/infer
+
+# Fail the build if the binary cannot run on this base, instead of failing later in CI.
+RUN infer --version
+
+WORKDIR /work

@@ -1,0 +1,7 @@
+FROM jenkins/jenkins:lts-jdk17
+
+# Copy just the docker CLI (a static binary) from the official image.
+# More reliable across base images than apt-get install docker.io.
+USER root
+COPY --from=docker:cli /usr/local/bin/docker /usr/local/bin/docker
+USER jenkins
