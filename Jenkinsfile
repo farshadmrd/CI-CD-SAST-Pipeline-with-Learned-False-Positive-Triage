@@ -16,7 +16,12 @@ pipeline {
     stage('cppcheck scan') {
       // Different image, same workspace: Jenkins bind-mounts the workspace into
       // each docker agent, so the libtiff clone from Checkout is already here.
-      agent { docker { image 'cppcheck-agent:1.0' reuseNode true } }
+      agent {
+        docker {
+          image 'cppcheck-agent:2.13.0'
+          reuseNode true
+        }
+      }
       steps {
         dir('libtiff') {
           // Rebuild from scratch so bear can capture every compile command.
