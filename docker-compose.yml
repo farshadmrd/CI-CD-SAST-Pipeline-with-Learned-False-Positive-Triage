@@ -27,5 +27,16 @@ services:
     profiles: ["build-only"]
     command: ["true"]
 
+  # Same pattern as infer-agent: built so the image exists in the host daemon,
+  # but not run as a service. Jenkins launches it per build to run cppcheck.
+  # The image tag must match the one referenced in the Jenkinsfile.
+  cppcheck-agent:
+    build:
+      context: .
+      dockerfile: cppcheck-agent.Dockerfile
+    image: cppcheck-agent:2.13.0
+    profiles: ["build-only"]
+    command: ["true"]
+
 volumes:
   jenkins_home:
