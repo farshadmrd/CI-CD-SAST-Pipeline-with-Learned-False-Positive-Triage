@@ -50,7 +50,10 @@ pipeline {
           // uid (1000) can talk to the daemon. 984 must match the host docker
           // socket gid: `stat -c '%g' /var/run/docker.sock` (same value as the
           // jenkins service's group_add in docker-compose.yml).
-          args '-v /var/run/docker.sock:/var/run/docker.sock --group-add 984'
+          // DOCKER_API_VERSION pins the API so Horusec v2.8.0's old Docker SDK
+          // skips version negotiation with the (much newer) host daemon, which
+          // otherwise fails its ">= 19.3" check with "docker not found".
+          args '-v /var/run/docker.sock:/var/run/docker.sock --group-add 984 -e DOCKER_API_VERSION=1.41'
         }
       }
       steps {
