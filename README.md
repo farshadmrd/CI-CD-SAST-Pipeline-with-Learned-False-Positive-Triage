@@ -20,19 +20,24 @@ it drives.
                           │   + docker CLI            │
                           └────────────┬─────────────┘
                                        │ docker.sock (per-build containers)
-                 ┌─────────────────────┼─────────────────────┐
-                 ▼                                           ▼
-       ┌───────────────────┐                       ┌───────────────────┐
-       │   infer-agent     │                       │  cppcheck-agent   │
-       │  Dockerfile.agent │                       │ cppcheck-agent.   │
-       │  Facebook Infer   │                       │ Dockerfile        │
-       └───────────────────┘                       └───────────────────┘
-                 │                                           │
-                 └──────────────► SAST findings ◄────────────┘
+         ┌─────────────────────────────┼─────────────────────────────┐
+         ▼                             ▼                             ▼
+ ┌───────────────────┐       ┌───────────────────┐       ┌───────────────────┐
+ │   infer-agent     │       │  cppcheck-agent   │       │  horusec-agent    │
+ │ sast-tools/       │       │ sast-tools/       │       │ sast-tools/       │
+ │ Dockerfile.agent  │       │ cppcheck-agent.   │       │ horusec-agent.    │
+ │ Facebook Infer    │       │ Dockerfile        │       │ Dockerfile        │
+ └───────────────────┘       └───────────────────┘       └───────────────────┘
+         │                             │                             │
+         └─────────────────► SAST findings ◄──────────────────────────┘
                                        │
                                        ▼
                           (planned) learned FP-triage model
 ```
+
+The SAST analyzer Dockerfiles live in [sast-tools/](sast-tools/); only
+[docker-compose.yml](docker-compose.yml) and the Jenkins controller image stay in
+the project root.
 
 Jenkins runs as a long-lived service. The analyzer images are **built but not run**
 as services — Jenkins launches them on demand for each build via the Docker Pipeline
@@ -43,8 +48,10 @@ plugin, using the host Docker daemon mounted at `/var/run/docker.sock`.
 | File | Image | Role |
 |------|-------|------|
 | [Dockerfile.jenkins](Dockerfile.jenkins) | `jenkins-docker:lts-jdk17` | Jenkins LTS (JDK 17) with the Docker CLI added so pipelines can launch agent containers. |
-| [Dockerfile.agent](Dockerfile.agent) | `infer-agent:1.2.0` | Ubuntu 22.04 + C/C++ build toolchain + [Facebook Infer](https://fbinfer.com/) v1.2.0. |
-| [cppcheck-agent.Dockerfile](cppcheck-agent.Dockerfile) | `cppcheck-agent:2.13.0` | Ubuntu 24.04 + [cppcheck](https://cppcheck.sourceforge.io/) + [bear](https://github.com/rizsotto/Bear) + build toolchain. |
+| [sast-tools/Dockerfile.agent](sast-tools/Dockerfile.agent) | `infer-agent:1.2.0` | Ubuntu 22.04 + C/C++ build toolchain + [Facebook Infer](https://fbinfer.com/) v1.2.0. |
+| [sast-tools/cppcheck-agent.Dockerfile](sast-tools/cppcheck-agent.Dockerfile) | `cppcheck-agent:2.13.0` | Ubuntu 24.04 + [cppcheck](https://cppcheck.sourceforge.io/) + [bear](https://github.com/rizsotto/Bear) + build toolchain. |
+| [sast-tools/horusec-agent.Dockerfile](sast-tools/horusec-agent.Dockerfile) | `horusec-agent:latest` | Ubuntu 24.04 + docker CLI + [Horusec](https://horusec.io/), which orchestrates per-language tool containers (Flawfinder for C) via the host docker socket. |
+| [Jenkinsfile](Jenkinsfile) | — | Declarative pipeline: checkout, Infer scan, cppcheck scan, Horusec scan, then archive the reports. |
 | [docker-compose.yml](docker-compose.yml) | — | Orchestrates the Jenkins service and builds the analyzer images. |
 
 ### Why `bear`?
@@ -83,8 +90,8 @@ the host daemon but never started as services:
 docker compose --profile build-only build
 ```
 
-This produces `infer-agent:1.2.0` and `cppcheck-agent:2.13.0` locally — the tags the
-Jenkins pipeline expects.
+This produces `infer-agent:1.2.0`, `cppcheck-agent:2.13.0`, and `horusec-agent:latest`
+locally — the tags the Jenkins pipeline expects.
 
 ### 3. Start Jenkins
 
@@ -113,7 +120,8 @@ SAST findings are the input to the learned false-positive triage stage.
 - [x] Jenkins CI image with Docker CLI
 - [x] Infer analyzer agent image
 - [x] cppcheck analyzer agent image (with `bear` for build parity)
-- [ ] Jenkinsfile defining the analysis pipeline
+- [x] Horusec analyzer agent image
+- [x] Jenkinsfile defining the analysis pipeline
 - [ ] Findings collection / normalization across tools
 - [ ] Labeled dataset of true vs. false positives
 - [ ] Learned false-positive triage model and its integration into the pipeline

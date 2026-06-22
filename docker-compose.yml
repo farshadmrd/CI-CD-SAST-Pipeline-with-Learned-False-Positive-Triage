@@ -22,7 +22,7 @@ services:
   infer-agent:
     build:
       context: .
-      dockerfile: Dockerfile.agent
+      dockerfile: sast-tools/Dockerfile.agent
     image: infer-agent:1.2.0
     profiles: ["build-only"]
     command: ["true"]
@@ -33,8 +33,20 @@ services:
   cppcheck-agent:
     build:
       context: .
-      dockerfile: cppcheck-agent.Dockerfile
+      dockerfile: sast-tools/cppcheck-agent.Dockerfile
     image: cppcheck-agent:2.13.0
+    profiles: ["build-only"]
+    command: ["true"]
+
+  # Same pattern again: built so the image exists in the host daemon, but not
+  # run as a service. Jenkins launches it per build to run Horusec, which
+  # orchestrates per-language tool containers via the mounted docker socket.
+  # The image tag must match the one referenced in the Jenkinsfile.
+  horusec-agent:
+    build:
+      context: .
+      dockerfile: sast-tools/horusec-agent.Dockerfile
+    image: horusec-agent:latest
     profiles: ["build-only"]
     command: ["true"]
 

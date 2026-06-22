@@ -38,10 +38,31 @@ pipeline {
         }
       }
     }
+    stage('Horusec scan') {
+      // Horusec is an orchestrator: through the mounted docker socket it launches
+      // a per-language tool container (Flawfinder for C). -p is the path inside
+      // this agent; -P is the matching host path so those sibling containers mount
+      // the real source rather than this agent's private filesystem.
+      agent {
+        docker {
+          image 'horusec-agent:latest'
+          args '-v /var/run/docker.sock:/var/run/docker.sock'
+        }
+      }
+      steps {
+        dir('libtiff') {
+          // Horusec exits non-zero when it finds issues; tolerate that so the
+          // Archive stage still runs and publishes the report.
+          sh '''horusec start -p ./ \
+                        -P "$WORKSPACE/libtiff" \
+                        -o json -O horusec-report.json || true'''
+        }
+      }
+    }
     stage('Archive') {
       agent any
       steps {
-        archiveArtifacts artifacts: 'libtiff/infer-out/report.json, libtiff/cppcheck-report.xml'
+        archiveArtifacts artifacts: 'libtiff/infer-out/report.json, libtiff/cppcheck-report.xml, libtiff/horusec-report.json'
       }
     }
   }
