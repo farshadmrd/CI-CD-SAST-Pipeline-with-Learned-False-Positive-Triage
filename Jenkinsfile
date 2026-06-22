@@ -46,7 +46,11 @@ pipeline {
       agent {
         docker {
           image 'horusec-agent:latest'
-          args '-v /var/run/docker.sock:/var/run/docker.sock'
+          // Mount the host docker socket AND join its group so the agent's
+          // uid (1000) can talk to the daemon. 984 must match the host docker
+          // socket gid: `stat -c '%g' /var/run/docker.sock` (same value as the
+          // jenkins service's group_add in docker-compose.yml).
+          args '-v /var/run/docker.sock:/var/run/docker.sock --group-add 984'
         }
       }
       steps {
