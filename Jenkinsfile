@@ -51,11 +51,18 @@ pipeline {
       }
       steps {
         dir('libtiff') {
-          // Horusec exits non-zero when it finds issues; tolerate that so the
-          // Archive stage still runs and publishes the report.
-          sh '''horusec start -p ./ \
+          // Diagnostic run: print the version, run with debug logging, then show
+          // the captured exit code and whether the report was actually written.
+          // `|| true` only on the final check so the stage never masks the result.
+          sh 'horusec version'
+          sh '''set +e
+                horusec start -p ./ \
                         -P "$WORKSPACE/libtiff" \
-                        -o json -O horusec-report.json || true'''
+                        -o json -O horusec-report.json \
+                        --log-level debug
+                status=$?
+                echo "=== horusec exit status: $status ==="
+                ls -la horusec-report.json && echo "report written" || echo "NO REPORT WRITTEN"'''
         }
       }
     }
