@@ -62,6 +62,11 @@ pipeline {
           // the captured exit code and whether the report was actually written.
           // `|| true` only on the final check so the stage never masks the result.
           sh 'horusec version'
+          // Diagnostic: show exactly what Horusec's ">= 19.3" check reads. It asks
+          // the daemon (inside this agent) for the SERVER version; a blank value here
+          // is what makes it report "below 19.3 / docker not found".
+          sh 'echo "--- docker version (full) ---"; docker version || true'
+          sh 'echo "--- Server.Version only ---"; docker version --format "{{.Server.Version}}" || true'
           sh '''set +e
                 horusec start -p ./ \
                         -P "$WORKSPACE/libtiff" \
