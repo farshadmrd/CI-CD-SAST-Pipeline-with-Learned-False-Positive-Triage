@@ -1,10 +1,16 @@
 pipeline {
-  agent { docker { image 'infer-agent:1.2.0' } }
+  // No top-level docker agent. Each stage launches its own container directly
+  // from the Jenkins controller (which has the docker CLI). A top-level docker
+  // agent plus a per-stage `reuseNode` would try to run `docker` *inside* the
+  // outer container, which has no docker CLI -> "docker: not found".
+  agent none
   stages {
     stage('Checkout') {
+      agent any
       steps { sh 'rm -rf libtiff && git clone https://gitlab.com/libtiff/libtiff.git' }
     }
     stage('Infer scan') {
+      agent { docker { image 'infer-agent:1.2.0' } }
       steps {
         dir('libtiff') {
           sh './autogen.sh && ./configure'
@@ -14,14 +20,10 @@ pipeline {
       }
     }
     stage('cppcheck scan') {
-      // Different image, same workspace: Jenkins bind-mounts the workspace into
-      // each docker agent, so the libtiff clone from Checkout is already here.
-      agent {
-        docker {
-          image 'cppcheck-agent:2.13.0'
-          reuseNode true
-        }
-      }
+      // Different image, same workspace: all stages run on the same node, whose
+      // workspace is bind-mounted into each container, so the libtiff clone and
+      // build outputs from the earlier stages are already present here.
+      agent { docker { image 'cppcheck-agent:2.13.0' } }
       steps {
         dir('libtiff') {
           // Rebuild from scratch so bear can capture every compile command.
@@ -37,6 +39,7 @@ pipeline {
       }
     }
     stage('Archive') {
+      agent any
       steps {
         archiveArtifacts artifacts: 'libtiff/infer-out/report.json, libtiff/cppcheck-report.xml'
       }
