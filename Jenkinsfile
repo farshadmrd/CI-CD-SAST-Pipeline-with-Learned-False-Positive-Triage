@@ -38,50 +38,68 @@ pipeline {
         }
       }
     }
-    stage('Horusec scan') {
-      // Horusec is an orchestrator: through the mounted docker socket it launches
-      // a per-language tool container (Flawfinder for C). -p is the path inside
-      // this agent; -P is the matching host path so those sibling containers mount
-      // the real source rather than this agent's private filesystem.
-      agent {
-        docker {
-          image 'horusec-agent:latest'
-          // Mount the host docker socket AND join its group so the agent's
-          // uid (1000) can talk to the daemon. 984 must match the host docker
-          // socket gid: `stat -c '%g' /var/run/docker.sock` (same value as the
-          // jenkins service's group_add in docker-compose.yml).
-          // DOCKER_API_VERSION pins the API so Horusec v2.8.0's old Docker SDK
-          // skips version negotiation with the (much newer) host daemon, which
-          // otherwise fails its ">= 19.3" check with "docker not found".
-          args '-v /var/run/docker.sock:/var/run/docker.sock --group-add 984 -e DOCKER_API_VERSION=1.41'
-        }
-      }
+    stage('CodeQL scan') {
+      // Same workspace as the other scans. CodeQL builds a database by watching
+      // a real compile, so ./configure + a clean build must run under
+      // `codeql database create --command`. It then analyzes that database with
+      // the standard C/C++ query suite and writes SARIF.
+      agent { docker { image 'codeql-agent:2.20.3' } }
       steps {
         dir('libtiff') {
-          // Diagnostic run: print the version, run with debug logging, then show
-          // the captured exit code and whether the report was actually written.
-          // `|| true` only on the final check so the stage never masks the result.
-          sh 'horusec version'
-          // Diagnostic: show exactly what Horusec's ">= 19.3" check reads. It asks
-          // the daemon (inside this agent) for the SERVER version; a blank value here
-          // is what makes it report "below 19.3 / docker not found".
-          sh 'echo "--- docker version (full) ---"; docker version || true'
-          sh 'echo "--- Server.Version only ---"; docker version --format "{{.Server.Version}}" || true'
-          sh '''set +e
-                horusec start -p ./ \
-                        -P "$WORKSPACE/libtiff" \
-                        -o json -O horusec-report.json \
-                        --log-level debug
-                status=$?
-                echo "=== horusec exit status: $status ==="
-                ls -la horusec-report.json && echo "report written" || echo "NO REPORT WRITTEN"'''
+          sh './autogen.sh && ./configure'
+          sh 'make clean || true'
+          sh 'codeql database create codeql-db --language=cpp --command="make" --overwrite'
+          sh '''codeql database analyze codeql-db \
+                       cpp-security-and-quality.qls \
+                       --format=sarif-latest \
+                       --output=codeql-report.sarif'''
         }
       }
     }
+    // stage('Horusec scan') {
+    //   // Horusec is an orchestrator: through the mounted docker socket it launches
+    //   // a per-language tool container (Flawfinder for C). -p is the path inside
+    //   // this agent; -P is the matching host path so those sibling containers mount
+    //   // the real source rather than this agent's private filesystem.
+    //   agent {
+    //     docker {
+    //       image 'horusec-agent:latest'
+    //       // Mount the host docker socket AND join its group so the agent's
+    //       // uid (1000) can talk to the daemon. 984 must match the host docker
+    //       // socket gid: `stat -c '%g' /var/run/docker.sock` (same value as the
+    //       // jenkins service's group_add in docker-compose.yml).
+    //       // DOCKER_API_VERSION pins the API so Horusec v2.8.0's old Docker SDK
+    //       // skips version negotiation with the (much newer) host daemon, which
+    //       // otherwise fails its ">= 19.3" check with "docker not found".
+    //       args '-v /var/run/docker.sock:/var/run/docker.sock --group-add 984 -e DOCKER_API_VERSION=1.41'
+    //     }
+    //   }
+    //   steps {
+    //     dir('libtiff') {
+    //       // Diagnostic run: print the version, run with debug logging, then show
+    //       // the captured exit code and whether the report was actually written.
+    //       // `|| true` only on the final check so the stage never masks the result.
+    //       sh 'horusec version'
+    //       // Diagnostic: show exactly what Horusec's ">= 19.3" check reads. It asks
+    //       // the daemon (inside this agent) for the SERVER version; a blank value here
+    //       // is what makes it report "below 19.3 / docker not found".
+    //       sh 'echo "--- docker version (full) ---"; docker version || true'
+    //       sh 'echo "--- Server.Version only ---"; docker version --format "{{.Server.Version}}" || true'
+    //       sh '''set +e
+    //             horusec start -p ./ \
+    //                     -P "$WORKSPACE/libtiff" \
+    //                     -o json -O horusec-report.json \
+    //                     --log-level debug
+    //             status=$?
+    //             echo "=== horusec exit status: $status ==="
+    //             ls -la horusec-report.json && echo "report written" || echo "NO REPORT WRITTEN"'''
+    //     }
+    //   }
+    // }
     stage('Archive') {
       agent any
       steps {
-        archiveArtifacts artifacts: 'libtiff/infer-out/report.json, libtiff/cppcheck-report.xml, libtiff/horusec-report.json'
+        archiveArtifacts artifacts: 'libtiff/infer-out/report.json, libtiff/cppcheck-report.xml, libtiff/codeql-report.sarif, libtiff/horusec-report.json'
       }
     }
   }

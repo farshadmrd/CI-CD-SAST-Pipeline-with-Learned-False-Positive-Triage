@@ -38,17 +38,29 @@ services:
     profiles: ["build-only"]
     command: ["true"]
 
+  # Same pattern as the other agents: built so the image exists in the host
+  # daemon, but not run as a service. Jenkins launches it per build to create a
+  # CodeQL database from the C/C++ build and analyze it.
+  # The image tag must match the one referenced in the Jenkinsfile.
+  codeql-agent:
+    build:
+      context: .
+      dockerfile: sast-tools/codeql-agent.Dockerfile
+    image: codeql-agent:2.20.3
+    profiles: ["build-only"]
+    command: ["true"]
+
   # Same pattern again: built so the image exists in the host daemon, but not
   # run as a service. Jenkins launches it per build to run Horusec, which
   # orchestrates per-language tool containers via the mounted docker socket.
   # The image tag must match the one referenced in the Jenkinsfile.
-  horusec-agent:
-    build:
-      context: .
-      dockerfile: sast-tools/horusec-agent.Dockerfile
-    image: horusec-agent:latest
-    profiles: ["build-only"]
-    command: ["true"]
+  # horusec-agent:
+  #   build:
+  #     context: .
+  #     dockerfile: sast-tools/horusec-agent.Dockerfile
+  #   image: horusec-agent:latest
+  #   profiles: ["build-only"]
+  #   command: ["true"]
 
 volumes:
   jenkins_home:
